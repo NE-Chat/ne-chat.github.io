@@ -1,4 +1,5 @@
-import {catalog} from './characters.js?v=ne-codex-3';
+import {turnLeaf} from './page-turn.mjs?v=ne-codex-4';
+import {catalog} from './characters.js?v=ne-codex-4';
 import {CATEGORIES,buildPages,categoriesOf,nextPosition,previousPosition,gridMetrics} from './catalog-core.mjs';
 'use strict';
 const entrance=document.querySelector('#entrance'),archive=document.querySelector('#archive'),book=document.querySelector('#open-book'),canvas=document.querySelector('#magic'),status=document.querySelector('#status');
@@ -61,7 +62,7 @@ const dialog=document.querySelector('#character-dialog');
 let allPages=buildPages(catalog.characters),layoutFrame=0;
 const labels=Object.fromEntries(CATEGORIES);
 const node=(tag,classes,text)=>{const n=document.createElement(tag);if(classes)n.className=classes;if(text!==undefined)n.textContent=text;return n;};
-const ornament=classes=>{const img=node('img',classes);img.src='ornament.svg';img.alt='';return img;};
+const ornament=classes=>{const img=node('img',classes);img.src=`emblem-${currentCategory}.svg`;img.alt='';return img;};
 function safeURL(value){if(!value)return '';try{const u=new URL(value,location.href);return ['http:','https:'].includes(u.protocol)?u.href:'';}catch{return '';}}
 function makeCard(character){
  const button=node('button','character-card');button.type='button';button.setAttribute('aria-label',character.name||'캐릭터');
@@ -75,9 +76,9 @@ function makePage(page,index,side){
  const sheet=node('section','paper-page '+side);sheet.setAttribute('aria-label',`${index+1}페이지`);sheet.dataset.page=String(index+1);sheet.dataset.kind=page.type;
  const content=node('div','page-content');sheet.append(content);
  if(page.type==='front'){
-  content.classList.add('front-page');content.append(ornament('front-mark'),node('div','monogram','NE'),node('div','title-rule'),node('div','front-mobile','도감'));
+  content.classList.add('front-page');content.append(node('div','monogram','NE'),node('div','title-rule'),node('div','front-mobile','도감'));
  }else if(page.type==='title'){
-  content.classList.add('title-page');content.append(ornament('title-ornament'),node('h1','book-title','도감'),node('div','title-rule'));
+  content.classList.add('title-page');content.append(node('h1','book-title','도감'),node('div','title-rule'));
  }else if(page.type==='world'){
   content.classList.add('world-page');content.append(node('h1','page-heading','세계관'),ornament('world-ornament'),node('h2','world-name',labels[currentCategory]));
   const description=catalog.worlds?.[currentCategory];if(description)content.append(node('p','world-copy',description));
@@ -91,23 +92,34 @@ function makePage(page,index,side){
 const gridObserver=new ResizeObserver(()=>scheduleLayout());
 function scheduleLayout(){if(layoutFrame)return;layoutFrame=requestAnimationFrame(()=>{layoutFrame=0;document.querySelectorAll('.character-grid').forEach(grid=>{const m=gridMetrics(grid.clientWidth,grid.clientHeight,singlePage.matches);grid.style.setProperty('--cols',m.columns);grid.style.setProperty('--card-w',m.cardWidth.toFixed(2)+'px');grid.style.setProperty('--gap',m.gap.toFixed(2)+'px');grid.style.setProperty('--label',m.label.toFixed(2)+'px');});});}
 function lastPosition(){let count=allPages.length;if(singlePage.matches&&allPages[count-1].type==='blank')count--;return singlePage.matches?count-1:Math.floor((count-1)/2)*2;}
-function renderArchive(direction=0){
+function renderArchive(){
  allPages=buildPages(catalog.characters,currentCategory);if(!singlePage.matches)pagePosition=Math.floor(pagePosition/2)*2;pagePosition=Math.max(0,Math.min(pagePosition,lastPosition()));
  gridObserver.disconnect();pagesElement.replaceChildren();
  const visible=singlePage.matches?1:2;for(let i=0;i<visible;i++){const index=pagePosition+i;if(allPages[index])pagesElement.append(makePage(allPages[index],index,i?'right':'left'));}
- pagesElement.classList.remove('turn-forward','turn-back');if(direction){void pagesElement.offsetWidth;pagesElement.classList.add(direction>0?'turn-forward':'turn-back');}
  previousButton.disabled=pagePosition===0;nextButton.disabled=nextPosition(pagePosition,currentCategory,singlePage.matches)>lastPosition();
  const number=n=>String(n).padStart(2,'0');document.querySelector('#pagination').textContent=currentCategory==='all'&&pagePosition===0?'':singlePage.matches?number(pagePosition+1):`${number(pagePosition+1)} — ${number(pagePosition+2)}`;
  document.querySelectorAll('.category-tab').forEach(tab=>tab.setAttribute('aria-pressed',String(tab.dataset.category===currentCategory)));
  document.querySelectorAll('.character-grid').forEach(grid=>gridObserver.observe(grid));scheduleLayout();
 }
-// Keep category controls usable as conventional buttons with no hidden navigation.
-for(const [id,label] of CATEGORIES){const button=node('button','category-tab',label);button.type='button';button.dataset.category=id;button.setAttribute('aria-pressed',String(id==='all'));button.addEventListener('click',()=>{currentCategory=id;pagePosition=id==='all'?2:0;renderArchive(1);status.textContent=`${label} 도감`});categories.append(button);}
-function turn(direction){if(direction>0&&nextButton.disabled||direction<0&&previousButton.disabled)return;pagePosition=direction>0?nextPosition(pagePosition,currentCategory,singlePage.matches):previousPosition(pagePosition,currentCategory,singlePage.matches);renderArchive(direction);status.textContent=`${pagePosition+1}페이지`;}
+let turning=false,cancelTurn=null,turnGeneration=0;
+function finishTurn(){turning=false;cancelTurn=null;reader.removeAttribute('aria-busy');}
+function stopTurn(){turnGeneration++;cancelTurn?.();finishTurn();}
+function changePages(update,direction){
+ if(turning)return;
+ const before=Array.from(pagesElement.children).map(p=>p.cloneNode(true));
+ update();renderArchive();
+ if(reduced.matches||!before.length)return;
+ turning=true;reader.setAttribute('aria-busy','true');const generation=++turnGeneration;
+ // Grid measurements run first so snapshots keep the exact card dimensions.
+ requestAnimationFrame(()=>{if(generation!==turnGeneration)return;cancelTurn=turnLeaf({host:reader,pages:pagesElement,before,after:Array.from(pagesElement.children),direction,single:singlePage.matches,onFinish:finishTurn});});
+}
+// Bookmarks and arrows turn the same physical paper leaf.
+for(const [id,label] of CATEGORIES){const button=node('button','category-tab',label);button.type='button';button.dataset.category=id;button.setAttribute('aria-pressed',String(id==='all'));button.addEventListener('click',()=>{changePages(()=>{currentCategory=id;pagePosition=id==='all'?2:0;},1);status.textContent=`${label} 도감`});categories.append(button);}
+function turn(direction){if(turning||direction>0&&nextButton.disabled||direction<0&&previousButton.disabled)return;changePages(()=>{pagePosition=direction>0?nextPosition(pagePosition,currentCategory,singlePage.matches):previousPosition(pagePosition,currentCategory,singlePage.matches);},direction);status.textContent=`${pagePosition+1}페이지`;}
 previousButton.addEventListener('click',()=>turn(-1));nextButton.addEventListener('click',()=>turn(1));
-document.querySelector('#home').addEventListener('click',()=>{currentCategory='all';pagePosition=0;renderArchive(-1);});
+document.querySelector('#home').addEventListener('click',()=>{if(currentCategory==='all'&&pagePosition===0)return;changePages(()=>{currentCategory='all';pagePosition=0;},-1);});
 document.addEventListener('keydown',event=>{if(archive.hidden||dialog.open||event.target.closest('input,textarea,select'))return;if(event.key==='ArrowRight'){event.preventDefault();turn(1);}if(event.key==='ArrowLeft'){event.preventDefault();turn(-1);}});
-singlePage.addEventListener('change',()=>{if(!archive.hidden)renderArchive();});window.addEventListener('resize',scheduleLayout,{passive:true});
+singlePage.addEventListener('change',()=>{stopTurn();if(!archive.hidden)renderArchive();});window.addEventListener('resize',()=>{stopTurn();scheduleLayout();},{passive:true});
 function showCharacter(character){
  const image=document.querySelector('#character-image');image.src=safeURL(character.image);image.alt=character.name||'';image.style.objectPosition=character.position||'50% 50%';image.parentElement.hidden=!safeURL(character.image);
  document.querySelector('#character-name').textContent=character.name||'';document.querySelector('#character-category').textContent=categoriesOf(character).map(c=>labels[c]).join(' · ');
@@ -128,10 +140,10 @@ function openBook(){
  later(enter,5750);
 }
 function replay(){
- clearTimers();archive.hidden=true;entrance.hidden=false;entrance.classList.remove('opening','zooming');setPhase('idle');book.disabled=false;book.tabIndex=0;openAction.disabled=false;openAction.hidden=false;if(ctx)ctx.clearRect(0,0,view.width,view.height);size();book.focus({preventScroll:true});status.textContent='책 펼치기';
+ stopTurn();clearTimers();archive.hidden=true;entrance.hidden=false;entrance.classList.remove('opening','zooming');setPhase('idle');book.disabled=false;book.tabIndex=0;openAction.disabled=false;openAction.hidden=false;if(ctx)ctx.clearRect(0,0,view.width,view.height);size();book.focus({preventScroll:true});status.textContent='책 펼치기';
 }
 book.addEventListener('click',openBook);openAction.addEventListener('click',openBook);document.querySelector('#skip').addEventListener('click',enter);document.querySelector('#replay').addEventListener('click',replay);
 window.addEventListener('resize',size,{passive:true});new ResizeObserver(size).observe(entrance);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelAnimationFrame(raf);raf=0;}else startFrames();});
-reduced.addEventListener('change',()=>{if(reduced.matches){cancelAnimationFrame(raf);raf=0;if(phase!=='idle'&&phase!=='done')enter();}else startFrames();});
+reduced.addEventListener('change',()=>{if(reduced.matches){stopTurn();cancelAnimationFrame(raf);raf=0;if(phase!=='idle'&&phase!=='done')enter();}else startFrames();});
 entrance.dataset.renderer='textured-canvas';setPhase('idle');size();
