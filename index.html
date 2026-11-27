@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#17120f">
+<meta name="description" content="책을 펼치고, 새로운 세계의 기록 속으로. 세계관과 캐릭터, 장소를 담는 도감.">
+<title>세계의 서고 · 세계관 도감</title>
+<link rel="icon" href="emblem.svg" type="image/svg+xml">
+<link rel="preload" href="cover.webp" as="image">
+<link rel="preload" href="wood.webp" as="image">
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<section id="entrance" aria-label="책을 펼쳐 도감에 입장">
+ <div class="desk" aria-hidden="true"></div>
+ <header class="entrance-top"><span class="wordmark"><span class="diamond" aria-hidden="true">◇</span> 세계의 서고</span><button id="skip" class="quiet">연출 건너뛰기 <span aria-hidden="true">↗</span></button></header>
+ <div class="intro-heading"><p class="eyebrow">THE ARCHIVE OF WORLDS</p><h1>모든 세계는<br>한 페이지에서 시작된다.</h1><span class="gold-rule" aria-hidden="true"></span></div>
+ <div class="table-light" aria-hidden="true"></div>
+ <div class="book-space" id="book-space">
+  <div class="book-shadow" aria-hidden="true"></div>
+  <button class="book" id="open-book" aria-label="책을 펼쳐 도감에 입장" aria-describedby="book-hint">
+   <span class="under surface" aria-hidden="true"></span>
+   <span class="block surface" aria-hidden="true"></span>
+   <span class="right-page surface paper" aria-hidden="true"></span>
+   <span class="leaf leaf-three surface" aria-hidden="true"><span class="recto paper"></span><span class="verso paper"></span></span>
+   <span class="leaf leaf-two surface" aria-hidden="true"><span class="recto paper"></span><span class="verso paper"></span></span>
+   <span class="leaf leaf-one surface" aria-hidden="true"><span class="recto paper"></span><span class="verso paper"></span></span>
+   <span class="cover surface" aria-hidden="true"><span class="cover-front"></span><span class="cover-inside paper"></span></span>
+   <span class="spine-glow" aria-hidden="true"></span>
+  </button>
+ </div>
+ <canvas id="magic" aria-hidden="true"></canvas>
+ <div class="entry-caption" id="book-hint"><span class="small-diamond" aria-hidden="true">✧</span><p>책을 눌러, 이야기를 펼쳐보세요</p><span class="caption-line" aria-hidden="true"></span></div>
+ <p class="ritual-caption" aria-hidden="true">잠들어 있던 기록이 깨어납니다.</p>
+ <footer class="entrance-bottom"><span>WORLD ARCHIVE</span><span>세계관 · 캐릭터 · 장소</span></footer>
+ <div class="portal" aria-hidden="true"></div>
+</section>
+<main id="archive" hidden>
+ <header class="archive-header"><a class="wordmark" href="#archive"><span class="diamond" aria-hidden="true">◇</span> 세계의 서고</a><button id="replay" class="quiet"><span aria-hidden="true">↺</span> 책 다시 펼치기</button></header>
+ <div class="archive-layout">
+  <aside><p class="eyebrow">CONTENTS</p><nav aria-label="도감 분류"><button class="chapter selected" data-chapter="world" aria-current="page"><span>Ⅰ</span>세계관 <span class="chapter-arrow">↗</span></button><button class="chapter" data-chapter="characters"><span>Ⅱ</span>캐릭터 <span class="chapter-arrow">↗</span></button><button class="chapter" data-chapter="places"><span>Ⅲ</span>장소 <span class="chapter-arrow">↗</span></button></nav><div class="aside-note">아직 기록되지 않은 세계.<br>이제, 이야기를 채워갈 차례입니다.</div></aside>
+  <article><p class="eyebrow" id="chapter-label">CHAPTER Ⅰ · WORLD</p><h2 id="chapter-title" tabindex="-1">세계관</h2><p class="chapter-intro" id="chapter-intro">이 세계가 시작된 이야기, 그리고 그 안의 규칙들.</p><div class="archive-divider"><span>✧</span></div><section class="blank-page"><img src="emblem.svg" width="72" height="72" alt=""><h3>첫 번째 기록을 기다립니다</h3><p id="empty-copy">세계의 배경과 역사를 담을 공간입니다.<br>아직 등록된 세계관이 없습니다.</p><span class="page-number" id="page-number">— 01 —</span></section></article>
+ </div>
+ <footer class="archive-footer">THE ARCHIVE OF WORLDS <span>끝나지 않은 이야기의 기록.</span></footer>
+</main>
+<p id="status" role="status" class="sr-only"></p>
+<noscript><style>#entrance{display:none}</style><div class="no-script"><h1>세계의 서고</h1><p>책이 열리는 연출을 보려면 브라우저의 JavaScript를 켜주세요.</p><p>세계관 · 캐릭터 · 장소 — 첫 번째 기록을 준비하고 있습니다.</p></div></noscript>
+</body>
+</html>
