@@ -13,8 +13,8 @@
 <link rel="preload" href="smoke.webp" as="image">
 <link rel="preload" href="paper.webp" as="image">
 <link rel="preload" href="reader-book.webp" as="image">
-<link rel="stylesheet" href="style.css?v=ne-codex-4">
-<script type="module" src="app.js?v=ne-codex-4"></script>
+<link rel="stylesheet" href="style.css?v=ne-codex-5">
+<script type="module" src="app.js?v=ne-codex-5"></script>
 </head>
 <body>
 <section id="entrance" aria-label="도감 입장">
@@ -36,6 +36,7 @@
   </div>
   <canvas id="magic" aria-hidden="true"></canvas>
  </div>
+ <div id="entry-book" aria-hidden="true" hidden></div>
  <div class="entry-controls"><button id="open-action" class="entry-button">펼치기 <span aria-hidden="true">◇</span></button></div>
 </section>
 <main id="archive" hidden aria-label="NE 도감">
@@ -51,6 +52,11 @@
   <div id="pages" class="pages"></div>
   <div class="gutter" aria-hidden="true"></div>
  </div>
+ <nav class="book-view-controls" aria-label="책 보기 방식">
+  <button type="button" data-book-view="left" aria-label="왼쪽 페이지 확대" aria-pressed="false">왼쪽</button>
+  <button type="button" data-book-view="spread" aria-label="책 전체 보기" aria-pressed="true">전체</button>
+  <button type="button" data-book-view="right" aria-label="오른쪽 페이지 확대" aria-pressed="false">오른쪽</button>
+ </nav>
  <footer class="reader-controls">
   <button id="previous" class="page-turn" aria-label="이전 페이지"><svg viewBox="0 0 36 18" aria-hidden="true"><path d="M32 9H4m8-7L4 9l8 7"/></svg></button>
   <span id="pagination" aria-live="polite"></span>

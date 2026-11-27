@@ -1,6 +1,6 @@
-import {turnLeaf} from './page-turn.mjs?v=ne-codex-4';
-import {catalog} from './characters.js?v=ne-codex-4';
-import {CATEGORIES,buildPages,categoriesOf,nextPosition,previousPosition,gridMetrics} from './catalog-core.mjs';
+import {turnLeaf} from './page-turn.mjs?v=ne-codex-5';
+import {catalog} from './characters.js?v=ne-codex-5';
+import {CATEGORIES,buildPages,categoriesOf,readingStep,gridMetrics} from './catalog-core.mjs?v=ne-codex-5';
 'use strict';
 const entrance=document.querySelector('#entrance'),archive=document.querySelector('#archive'),book=document.querySelector('#open-book'),canvas=document.querySelector('#magic'),status=document.querySelector('#status');
 const openAction=document.querySelector('#open-action');
@@ -54,7 +54,8 @@ function draw(now){
 }
 function frame(now){raf=0;if(phase==='idle'||phase==='done'||document.hidden||reduced.matches)return;draw(now);raf=requestAnimationFrame(frame);}
 function startFrames(){if(!raf&&!document.hidden&&!reduced.matches&&phase!=='idle'&&phase!=='done')raf=requestAnimationFrame(frame);}
-let currentCategory='all',pagePosition=0;
+let currentCategory='all',pagePosition=0,bookView='spread';
+let zoomAnimation=null;
 const singlePage=matchMedia('(max-width:700px)');
 const categories=document.querySelector('#categories'),pagesElement=document.querySelector('#pages'),reader=document.querySelector('#reader');
 const previousButton=document.querySelector('#previous'),nextButton=document.querySelector('#next');
@@ -91,13 +92,21 @@ function makePage(page,index,side){
 }
 const gridObserver=new ResizeObserver(()=>scheduleLayout());
 function scheduleLayout(){if(layoutFrame)return;layoutFrame=requestAnimationFrame(()=>{layoutFrame=0;document.querySelectorAll('.character-grid').forEach(grid=>{const m=gridMetrics(grid.clientWidth,grid.clientHeight,singlePage.matches);grid.style.setProperty('--cols',m.columns);grid.style.setProperty('--card-w',m.cardWidth.toFixed(2)+'px');grid.style.setProperty('--gap',m.gap.toFixed(2)+'px');grid.style.setProperty('--label',m.label.toFixed(2)+'px');});});}
-function lastPosition(){let count=allPages.length;if(singlePage.matches&&allPages[count-1].type==='blank')count--;return singlePage.matches?count-1:Math.floor((count-1)/2)*2;}
+function lastPosition(){return Math.floor((allPages.length-1)/2)*2;}
+function targetStep(direction){return readingStep(pagePosition,bookView,direction,singlePage.matches);}
+function syncView(){
+ reader.dataset.view=singlePage.matches?bookView:'spread';archive.dataset.view=reader.dataset.view;
+ Array.from(pagesElement.children).forEach((page,i)=>{page.inert=singlePage.matches&&bookView!=='spread'&&i!==(bookView==='left'?0:1);});
+ document.querySelectorAll('[data-book-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.bookView===bookView)));
+ previousButton.disabled=targetStep(-1).position<0;nextButton.disabled=targetStep(1).position>lastPosition();
+}
+function setBookView(view){if(turning)return;const pan=bookView!=='spread'&&view!=='spread';reader.classList.toggle('panning',pan);bookView=view;syncView();scheduleLayout();if(pan)setTimeout(()=>reader.classList.remove('panning'),380);}
 function renderArchive(){
- allPages=buildPages(catalog.characters,currentCategory);if(!singlePage.matches)pagePosition=Math.floor(pagePosition/2)*2;pagePosition=Math.max(0,Math.min(pagePosition,lastPosition()));
+ allPages=buildPages(catalog.characters,currentCategory);pagePosition=Math.floor(pagePosition/2)*2;pagePosition=Math.max(0,Math.min(pagePosition,lastPosition()));
  gridObserver.disconnect();pagesElement.replaceChildren();
- const visible=singlePage.matches?1:2;for(let i=0;i<visible;i++){const index=pagePosition+i;if(allPages[index])pagesElement.append(makePage(allPages[index],index,i?'right':'left'));}
- previousButton.disabled=pagePosition===0;nextButton.disabled=nextPosition(pagePosition,currentCategory,singlePage.matches)>lastPosition();
- const number=n=>String(n).padStart(2,'0');document.querySelector('#pagination').textContent=currentCategory==='all'&&pagePosition===0?'':singlePage.matches?number(pagePosition+1):`${number(pagePosition+1)} — ${number(pagePosition+2)}`;
+ const visible=2;for(let i=0;i<visible;i++){const index=pagePosition+i;if(allPages[index])pagesElement.append(makePage(allPages[index],index,i?'right':'left'));}
+ syncView();
+ const number=n=>String(n).padStart(2,'0');document.querySelector('#pagination').textContent=currentCategory==='all'&&pagePosition===0?'':`${number(pagePosition+1)} — ${number(pagePosition+2)}`;
  document.querySelectorAll('.category-tab').forEach(tab=>tab.setAttribute('aria-pressed',String(tab.dataset.category===currentCategory)));
  document.querySelectorAll('.character-grid').forEach(grid=>gridObserver.observe(grid));scheduleLayout();
 }
@@ -111,15 +120,26 @@ function changePages(update,direction){
  if(reduced.matches||!before.length)return;
  turning=true;reader.setAttribute('aria-busy','true');const generation=++turnGeneration;
  // Grid measurements run first so snapshots keep the exact card dimensions.
- requestAnimationFrame(()=>{if(generation!==turnGeneration)return;cancelTurn=turnLeaf({host:reader,pages:pagesElement,before,after:Array.from(pagesElement.children),direction,single:singlePage.matches,onFinish:finishTurn});});
+ requestAnimationFrame(()=>{if(generation!==turnGeneration)return;cancelTurn=turnLeaf({host:reader,pages:pagesElement,before,after:Array.from(pagesElement.children),direction,single:false,onFinish:finishTurn});});
 }
 // Bookmarks and arrows turn the same physical paper leaf.
-for(const [id,label] of CATEGORIES){const button=node('button','category-tab',label);button.type='button';button.dataset.category=id;button.setAttribute('aria-pressed',String(id==='all'));button.addEventListener('click',()=>{changePages(()=>{currentCategory=id;pagePosition=id==='all'?2:0;},1);status.textContent=`${label} 도감`});categories.append(button);}
-function turn(direction){if(turning||direction>0&&nextButton.disabled||direction<0&&previousButton.disabled)return;changePages(()=>{pagePosition=direction>0?nextPosition(pagePosition,currentCategory,singlePage.matches):previousPosition(pagePosition,currentCategory,singlePage.matches);},direction);status.textContent=`${pagePosition+1}페이지`;}
+for(const [id,label] of CATEGORIES){const button=node('button','category-tab',label);button.type='button';button.dataset.category=id;button.setAttribute('aria-pressed',String(id==='all'));button.addEventListener('click',()=>{changePages(()=>{currentCategory=id;pagePosition=id==='all'?2:0;if(bookView==='right')bookView='left';},1);status.textContent=`${label} 도감`});categories.append(button);}
+function turn(direction){
+ if(turning||direction>0&&nextButton.disabled||direction<0&&previousButton.disabled)return;
+ const target=targetStep(direction);
+ if(target.position===pagePosition){setBookView(target.view);return;}
+ changePages(()=>{pagePosition=target.position;bookView=target.view;},direction);status.textContent=`${pagePosition+1}페이지`;
+}
+for(const b of document.querySelectorAll('[data-book-view]'))b.addEventListener('click',()=>setBookView(b.dataset.bookView));
+let touchStart=null;
+reader.addEventListener('pointerdown',e=>{if(e.pointerType==='touch')touchStart={x:e.clientX,y:e.clientY};});
+reader.addEventListener('pointerup',e=>{if(!touchStart)return;const dx=e.clientX-touchStart.x,dy=e.clientY-touchStart.y;touchStart=null;if(Math.abs(dx)>55&&Math.abs(dx)>Math.abs(dy)*1.5){reader.dataset.swiped='true';turn(dx<0?1:-1);setTimeout(()=>delete reader.dataset.swiped,300);}});
+reader.addEventListener('pointercancel',()=>{touchStart=null;});
+reader.addEventListener('click',e=>{if(reader.dataset.swiped){e.preventDefault();e.stopImmediatePropagation();}},true);
 previousButton.addEventListener('click',()=>turn(-1));nextButton.addEventListener('click',()=>turn(1));
-document.querySelector('#home').addEventListener('click',()=>{if(currentCategory==='all'&&pagePosition===0)return;changePages(()=>{currentCategory='all';pagePosition=0;},-1);});
+document.querySelector('#home').addEventListener('click',()=>{if(currentCategory==='all'&&pagePosition===0){setBookView('spread');return;}changePages(()=>{currentCategory='all';pagePosition=0;if(bookView==='right')bookView='left';},-1);});
 document.addEventListener('keydown',event=>{if(archive.hidden||dialog.open||event.target.closest('input,textarea,select'))return;if(event.key==='ArrowRight'){event.preventDefault();turn(1);}if(event.key==='ArrowLeft'){event.preventDefault();turn(-1);}});
-singlePage.addEventListener('change',()=>{stopTurn();if(!archive.hidden)renderArchive();});window.addEventListener('resize',()=>{stopTurn();scheduleLayout();},{passive:true});
+singlePage.addEventListener('change',()=>{stopTurn();bookView='spread';if(!archive.hidden)renderArchive();});window.addEventListener('resize',()=>{stopTurn();if(phase==='zooming')enter();scheduleLayout();},{passive:true});
 function showCharacter(character){
  const image=document.querySelector('#character-image');image.src=safeURL(character.image);image.alt=character.name||'';image.style.objectPosition=character.position||'50% 50%';image.parentElement.hidden=!safeURL(character.image);
  document.querySelector('#character-name').textContent=character.name||'';document.querySelector('#character-category').textContent=categoriesOf(character).map(c=>labels[c]).join(' · ');
@@ -129,18 +149,36 @@ function showCharacter(character){
 }
 document.querySelector('#close-character').addEventListener('click',()=>dialog.close());dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();}});
 
+function prepareArchive(){
+ currentCategory='all';pagePosition=0;bookView='spread';archive.hidden=false;archive.classList.add('preparing');archive.inert=true;renderArchive();
+}
 function enter(){
- if(phase==='done')return;clearTimers();setPhase('done');cancelAnimationFrame(raf);raf=0;entrance.hidden=true;archive.hidden=false;currentCategory='all';pagePosition=0;renderArchive();reader.focus({preventScroll:true});status.textContent='NE 도감';
+ if(phase==='done')return;
+ clearTimers();zoomAnimation?.cancel();zoomAnimation=null;setPhase('done');cancelAnimationFrame(raf);raf=0;
+ entrance.hidden=true;document.querySelector('#entry-book').hidden=true;
+ if(archive.hidden){prepareArchive();}
+ archive.classList.remove('preparing');archive.inert=false;reader.focus({preventScroll:true});status.textContent='NE 도감';
+}
+function zoomIntoBook(){
+ setPhase('zooming');prepareArchive();
+ const source=document.querySelector('#spread').getBoundingClientRect(),target=reader.getBoundingClientRect(),art=document.querySelector('#entry-book');
+ const rectStyle=r=>({left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});
+ Object.assign(art.style,rectStyle(source));art.hidden=false;entrance.classList.add('zooming');
+ zoomAnimation=art.animate([rectStyle(source),rectStyle(target)],{duration:1600,easing:'cubic-bezier(.35,0,.2,1)',fill:'forwards'});
+ later(()=>{archive.classList.remove('preparing');entrance.classList.add('handover');},1400);
+ later(enter,1700);
 }
 function openBook(){
- if(phase!=='idle')return;setPhase('opening');began=performance.now();book.disabled=true;openAction.disabled=true;entrance.classList.add('opening');status.textContent='책이 열리고 있습니다.';size();startFrames();
+ if(phase!=='idle')return;
+ setPhase('opening');began=performance.now();book.disabled=true;openAction.disabled=true;entrance.classList.add('opening');status.textContent='책이 열리고 있습니다.';size();startFrames();
  if(reduced.matches){enter();return;}
- later(()=>{setPhase('open');openAction.hidden=true;book.tabIndex=-1;size();},2100);
- later(()=>{setPhase('zooming');entrance.classList.add('zooming');},4200);
- later(enter,5750);
+ later(()=>{setPhase('open');entrance.classList.add('opened');openAction.hidden=true;book.tabIndex=-1;size();},2100);
+ later(zoomIntoBook,4200);
 }
 function replay(){
- stopTurn();clearTimers();archive.hidden=true;entrance.hidden=false;entrance.classList.remove('opening','zooming');setPhase('idle');book.disabled=false;book.tabIndex=0;openAction.disabled=false;openAction.hidden=false;if(ctx)ctx.clearRect(0,0,view.width,view.height);size();book.focus({preventScroll:true});status.textContent='책 펼치기';
+ stopTurn();clearTimers();zoomAnimation?.cancel();zoomAnimation=null;archive.hidden=true;archive.classList.remove('preparing');archive.inert=false;
+ entrance.hidden=false;entrance.classList.remove('opening','opened','zooming','handover');document.querySelector('#entry-book').hidden=true;
+ setPhase('idle');book.disabled=false;book.tabIndex=0;openAction.disabled=false;openAction.hidden=false;if(ctx)ctx.clearRect(0,0,view.width,view.height);size();book.focus({preventScroll:true});status.textContent='책 펼치기';
 }
 book.addEventListener('click',openBook);openAction.addEventListener('click',openBook);document.querySelector('#skip').addEventListener('click',enter);document.querySelector('#replay').addEventListener('click',replay);
 window.addEventListener('resize',size,{passive:true});new ResizeObserver(size).observe(entrance);
