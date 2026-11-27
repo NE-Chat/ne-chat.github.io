@@ -1,6 +1,8 @@
+import {catalog} from './characters.js?v=ne-codex-3';
+import {CATEGORIES,buildPages,categoriesOf,nextPosition,previousPosition,gridMetrics} from './catalog-core.mjs';
 'use strict';
 const entrance=document.querySelector('#entrance'),archive=document.querySelector('#archive'),book=document.querySelector('#open-book'),canvas=document.querySelector('#magic'),status=document.querySelector('#status');
-const openAction=document.querySelector('#open-action'),enterAction=document.querySelector('#enter');
+const openAction=document.querySelector('#open-action');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 let phase='idle',began=0,raf=0,timers=[],view={width:0,height:0};
 const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
@@ -51,26 +53,85 @@ function draw(now){
 }
 function frame(now){raf=0;if(phase==='idle'||phase==='done'||document.hidden||reduced.matches)return;draw(now);raf=requestAnimationFrame(frame);}
 function startFrames(){if(!raf&&!document.hidden&&!reduced.matches&&phase!=='idle'&&phase!=='done')raf=requestAnimationFrame(frame);}
-function enter(){
- if(phase==='done')return;clearTimers();setPhase('done');cancelAnimationFrame(raf);raf=0;entrance.hidden=true;archive.hidden=false;document.querySelector('#chapter-title').focus({preventScroll:true});window.scrollTo(0,0);status.textContent='도감에 입장했습니다.';
+let currentCategory='all',pagePosition=0;
+const singlePage=matchMedia('(max-width:700px)');
+const categories=document.querySelector('#categories'),pagesElement=document.querySelector('#pages'),reader=document.querySelector('#reader');
+const previousButton=document.querySelector('#previous'),nextButton=document.querySelector('#next');
+const dialog=document.querySelector('#character-dialog');
+let allPages=buildPages(catalog.characters),layoutFrame=0;
+const labels=Object.fromEntries(CATEGORIES);
+const node=(tag,classes,text)=>{const n=document.createElement(tag);if(classes)n.className=classes;if(text!==undefined)n.textContent=text;return n;};
+const ornament=classes=>{const img=node('img',classes);img.src='ornament.svg';img.alt='';return img;};
+function safeURL(value){if(!value)return '';try{const u=new URL(value,location.href);return ['http:','https:'].includes(u.protocol)?u.href:'';}catch{return '';}}
+function makeCard(character){
+ const button=node('button','character-card');button.type='button';button.setAttribute('aria-label',character.name||'캐릭터');
+ const frame=node('span','portrait-frame'),name=node('span','character-name',character.name||'');
+ const src=safeURL(character.image);
+ if(src){const img=node('img');img.src=src;img.alt=character.name||'';img.loading='lazy';img.decoding='async';img.style.objectPosition=character.position||'50% 50%';frame.append(img);img.addEventListener('error',()=>{img.hidden=true;frame.append(node('span','portrait-empty','◇'));},{once:true});}
+ else frame.append(node('span','portrait-empty','◇'));
+ button.append(frame,name);button.addEventListener('click',()=>showCharacter(character));return button;
 }
-function transitionIn(){if(phase!=='open')return;setPhase('entering');entrance.classList.add('entering');enterAction.disabled=true;later(enter,reduced.matches?0:700);}
+function makePage(page,index,side){
+ const sheet=node('section','paper-page '+side);sheet.setAttribute('aria-label',`${index+1}페이지`);sheet.dataset.page=String(index+1);sheet.dataset.kind=page.type;
+ const content=node('div','page-content');sheet.append(content);
+ if(page.type==='front'){
+  content.classList.add('front-page');content.append(ornament('front-mark'),node('div','monogram','NE'),node('div','title-rule'),node('div','front-mobile','도감'));
+ }else if(page.type==='title'){
+  content.classList.add('title-page');content.append(ornament('title-ornament'),node('h1','book-title','도감'),node('div','title-rule'));
+ }else if(page.type==='world'){
+  content.classList.add('world-page');content.append(node('h1','page-heading','세계관'),ornament('world-ornament'),node('h2','world-name',labels[currentCategory]));
+  const description=catalog.worlds?.[currentCategory];if(description)content.append(node('p','world-copy',description));
+ }else if(page.type==='characters'){
+  content.classList.add('catalog-page');content.append(node('h2','catalog-heading',labels[currentCategory]));const grid=node('div','character-grid');grid.setAttribute('aria-label','캐릭터 목록');
+  page.items.forEach(character=>grid.append(makeCard(character)));content.append(grid);
+ }
+ if(page.type!=='front'&&page.type!=='title')sheet.append(node('span','page-number',String(index+1).padStart(2,'0')));
+ return sheet;
+}
+const gridObserver=new ResizeObserver(()=>scheduleLayout());
+function scheduleLayout(){if(layoutFrame)return;layoutFrame=requestAnimationFrame(()=>{layoutFrame=0;document.querySelectorAll('.character-grid').forEach(grid=>{const m=gridMetrics(grid.clientWidth,grid.clientHeight,singlePage.matches);grid.style.setProperty('--cols',m.columns);grid.style.setProperty('--card-w',m.cardWidth.toFixed(2)+'px');grid.style.setProperty('--gap',m.gap.toFixed(2)+'px');grid.style.setProperty('--label',m.label.toFixed(2)+'px');});});}
+function lastPosition(){let count=allPages.length;if(singlePage.matches&&allPages[count-1].type==='blank')count--;return singlePage.matches?count-1:Math.floor((count-1)/2)*2;}
+function renderArchive(direction=0){
+ allPages=buildPages(catalog.characters,currentCategory);if(!singlePage.matches)pagePosition=Math.floor(pagePosition/2)*2;pagePosition=Math.max(0,Math.min(pagePosition,lastPosition()));
+ gridObserver.disconnect();pagesElement.replaceChildren();
+ const visible=singlePage.matches?1:2;for(let i=0;i<visible;i++){const index=pagePosition+i;if(allPages[index])pagesElement.append(makePage(allPages[index],index,i?'right':'left'));}
+ pagesElement.classList.remove('turn-forward','turn-back');if(direction){void pagesElement.offsetWidth;pagesElement.classList.add(direction>0?'turn-forward':'turn-back');}
+ previousButton.disabled=pagePosition===0;nextButton.disabled=nextPosition(pagePosition,currentCategory,singlePage.matches)>lastPosition();
+ const number=n=>String(n).padStart(2,'0');document.querySelector('#pagination').textContent=currentCategory==='all'&&pagePosition===0?'':singlePage.matches?number(pagePosition+1):`${number(pagePosition+1)} — ${number(pagePosition+2)}`;
+ document.querySelectorAll('.category-tab').forEach(tab=>tab.setAttribute('aria-pressed',String(tab.dataset.category===currentCategory)));
+ document.querySelectorAll('.character-grid').forEach(grid=>gridObserver.observe(grid));scheduleLayout();
+}
+// Keep category controls usable as conventional buttons with no hidden navigation.
+for(const [id,label] of CATEGORIES){const button=node('button','category-tab',label);button.type='button';button.dataset.category=id;button.setAttribute('aria-pressed',String(id==='all'));button.addEventListener('click',()=>{currentCategory=id;pagePosition=id==='all'?2:0;renderArchive(1);status.textContent=`${label} 도감`});categories.append(button);}
+function turn(direction){if(direction>0&&nextButton.disabled||direction<0&&previousButton.disabled)return;pagePosition=direction>0?nextPosition(pagePosition,currentCategory,singlePage.matches):previousPosition(pagePosition,currentCategory,singlePage.matches);renderArchive(direction);status.textContent=`${pagePosition+1}페이지`;}
+previousButton.addEventListener('click',()=>turn(-1));nextButton.addEventListener('click',()=>turn(1));
+document.querySelector('#home').addEventListener('click',()=>{currentCategory='all';pagePosition=0;renderArchive(-1);});
+document.addEventListener('keydown',event=>{if(archive.hidden||dialog.open||event.target.closest('input,textarea,select'))return;if(event.key==='ArrowRight'){event.preventDefault();turn(1);}if(event.key==='ArrowLeft'){event.preventDefault();turn(-1);}});
+singlePage.addEventListener('change',()=>{if(!archive.hidden)renderArchive();});window.addEventListener('resize',scheduleLayout,{passive:true});
+function showCharacter(character){
+ const image=document.querySelector('#character-image');image.src=safeURL(character.image);image.alt=character.name||'';image.style.objectPosition=character.position||'50% 50%';image.parentElement.hidden=!safeURL(character.image);
+ document.querySelector('#character-name').textContent=character.name||'';document.querySelector('#character-category').textContent=categoriesOf(character).map(c=>labels[c]).join(' · ');
+ const description=document.querySelector('#character-description');description.textContent=character.description||'';description.hidden=!character.description;
+ const link=document.querySelector('#character-link'),url=safeURL(character.url);link.hidden=!url;link.href=url||'#';link.setAttribute('aria-label',`${character.name||'캐릭터'} 링크 열기`);
+ dialog.showModal();
+}
+document.querySelector('#close-character').addEventListener('click',()=>dialog.close());dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();}});
+
+function enter(){
+ if(phase==='done')return;clearTimers();setPhase('done');cancelAnimationFrame(raf);raf=0;entrance.hidden=true;archive.hidden=false;currentCategory='all';pagePosition=0;renderArchive();reader.focus({preventScroll:true});status.textContent='NE 도감';
+}
 function openBook(){
  if(phase!=='idle')return;setPhase('opening');began=performance.now();book.disabled=true;openAction.disabled=true;entrance.classList.add('opening');status.textContent='책이 열리고 있습니다.';size();startFrames();
- later(()=>{setPhase('open');openAction.hidden=true;enterAction.hidden=false;enterAction.disabled=false;book.tabIndex=-1;status.textContent='책을 펼쳤습니다. 입장 버튼을 누르면 도감으로 이동합니다.';size();if(reduced.matches)draw(began+3500);},reduced.matches?0:2100);
+ if(reduced.matches){enter();return;}
+ later(()=>{setPhase('open');openAction.hidden=true;book.tabIndex=-1;size();},2100);
+ later(()=>{setPhase('zooming');entrance.classList.add('zooming');},4200);
+ later(enter,5750);
 }
 function replay(){
- clearTimers();archive.hidden=true;entrance.hidden=false;entrance.classList.remove('opening','entering');setPhase('idle');book.disabled=false;book.tabIndex=0;openAction.disabled=false;openAction.hidden=false;enterAction.hidden=true;enterAction.disabled=false;if(ctx)ctx.clearRect(0,0,view.width,view.height);window.scrollTo(0,0);size();book.focus({preventScroll:true});status.textContent='책을 다시 펼칠 수 있습니다.';
+ clearTimers();archive.hidden=true;entrance.hidden=false;entrance.classList.remove('opening','zooming');setPhase('idle');book.disabled=false;book.tabIndex=0;openAction.disabled=false;openAction.hidden=false;if(ctx)ctx.clearRect(0,0,view.width,view.height);size();book.focus({preventScroll:true});status.textContent='책 펼치기';
 }
-book.addEventListener('click',openBook);openAction.addEventListener('click',openBook);enterAction.addEventListener('click',transitionIn);document.querySelector('#skip').addEventListener('click',enter);document.querySelector('#replay').addEventListener('click',replay);
-window.addEventListener('resize',size,{passive:true});
-new ResizeObserver(size).observe(entrance);
+book.addEventListener('click',openBook);openAction.addEventListener('click',openBook);document.querySelector('#skip').addEventListener('click',enter);document.querySelector('#replay').addEventListener('click',replay);
+window.addEventListener('resize',size,{passive:true});new ResizeObserver(size).observe(entrance);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelAnimationFrame(raf);raf=0;}else startFrames();});
-reduced.addEventListener('change',()=>{if(reduced.matches){cancelAnimationFrame(raf);raf=0;if(phase==='open'||phase==='opening')draw(began+3500);}else startFrames();});
+reduced.addEventListener('change',()=>{if(reduced.matches){cancelAnimationFrame(raf);raf=0;if(phase!=='idle'&&phase!=='done')enter();}else startFrames();});
 entrance.dataset.renderer='textured-canvas';setPhase('idle');size();
-
-const chapters={world:['CHAPTER Ⅰ · WORLD','세계관','이 세계가 시작된 이야기, 그리고 그 안의 규칙들.','세계의 배경과 역사를 담을 공간입니다.\n아직 등록된 세계관이 없습니다.','01'],characters:['CHAPTER Ⅱ · CHARACTERS','캐릭터','각자의 이야기를 품고, 이 세계를 살아가는 인물들.','캐릭터의 이미지와 설정을 담을 공간입니다.\n아직 등록된 캐릭터가 없습니다.','02'],places:['CHAPTER Ⅲ · PLACES','장소','이야기가 시작되고, 인연이 머물렀던 공간들.','주요 장소의 풍경과 설명을 담을 공간입니다.\n아직 등록된 장소가 없습니다.','03']};
-document.querySelectorAll('.chapter').forEach(b=>b.addEventListener('click',()=>{
- const c=chapters[b.dataset.chapter];document.querySelectorAll('.chapter').forEach(n=>{n.classList.toggle('selected',n===b);n===b?n.setAttribute('aria-current','page'):n.removeAttribute('aria-current')});
- document.querySelector('#chapter-label').textContent=c[0];document.querySelector('#chapter-title').textContent=c[1];document.querySelector('#chapter-intro').textContent=c[2];document.querySelector('#empty-copy').textContent=c[3];document.querySelector('#empty-copy').style.whiteSpace='pre-line';document.querySelector('#page-number').textContent='— '+c[4]+' —';document.querySelector('#chapter-title').focus({preventScroll:true});
-}));
