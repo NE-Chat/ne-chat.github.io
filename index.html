@@ -9,32 +9,33 @@
 <link rel="icon" href="emblem.svg" type="image/svg+xml">
 <link rel="preload" href="cover.webp" as="image">
 <link rel="preload" href="wood.webp" as="image">
-<link rel="stylesheet" href="style.css">
-<script src="app.js" defer></script>
+<link rel="preload" href="open-book.webp" as="image">
+<link rel="preload" href="smoke.webp" as="image">
+<link rel="stylesheet" href="style.css?v=20261127-smoke2">
+<script src="app.js?v=20261127-smoke2" defer></script>
 </head>
 <body>
-<section id="entrance" aria-label="책을 펼쳐 도감에 입장">
+<section id="entrance" aria-label="도감 입장">
  <div class="desk" aria-hidden="true"></div>
- <header class="entrance-top"><span class="wordmark"><span class="diamond" aria-hidden="true">◇</span> 세계의 서고</span><button id="skip" class="quiet">연출 건너뛰기 <span aria-hidden="true">↗</span></button></header>
- <div class="intro-heading"><p class="eyebrow">THE ARCHIVE OF WORLDS</p><h1>모든 세계는<br>한 페이지에서 시작된다.</h1><span class="gold-rule" aria-hidden="true"></span></div>
- <div class="table-light" aria-hidden="true"></div>
- <div class="book-space" id="book-space">
-  <div class="book-shadow" aria-hidden="true"></div>
-  <button class="book" id="open-book" aria-label="책을 펼쳐 도감에 입장" aria-describedby="book-hint">
-   <span class="under surface" aria-hidden="true"></span>
-   <span class="block surface" aria-hidden="true"></span>
-   <span class="right-page surface paper" aria-hidden="true"></span>
-   <span class="leaf leaf-three surface" aria-hidden="true"><span class="recto paper"></span><span class="verso paper"></span></span>
-   <span class="leaf leaf-two surface" aria-hidden="true"><span class="recto paper"></span><span class="verso paper"></span></span>
-   <span class="leaf leaf-one surface" aria-hidden="true"><span class="recto paper"></span><span class="verso paper"></span></span>
-   <span class="cover surface" aria-hidden="true"><span class="cover-front"></span><span class="cover-inside paper"></span></span>
-   <span class="spine-glow" aria-hidden="true"></span>
-  </button>
+ <button id="skip" class="skip" aria-label="연출을 건너뛰고 도감 입장">건너뛰기 <span aria-hidden="true">↗</span></button>
+ <div class="scene" id="scene">
+  <div class="desk-glow" aria-hidden="true"></div>
+  <div class="spread" id="spread" aria-hidden="true">
+   <div class="spread-shadow"></div>
+   <div class="spread-half spread-right"></div>
+   <div class="spread-half spread-left"></div>
+   <div class="page-light"></div>
+   <div id="smoke-source"></div>
+  </div>
+  <div class="closed-position">
+   <button id="open-book" class="closed-book" aria-label="책 펼치기">
+    <span class="closed-edge" aria-hidden="true"></span>
+    <span class="cover-hinge" aria-hidden="true"><span class="cover-face"></span><span class="cover-back"></span></span>
+   </button>
+  </div>
+  <canvas id="magic" aria-hidden="true"></canvas>
  </div>
- <canvas id="magic" aria-hidden="true"></canvas>
- <div class="entry-caption" id="book-hint"><span class="small-diamond" aria-hidden="true">✧</span><p>책을 눌러, 이야기를 펼쳐보세요</p><span class="caption-line" aria-hidden="true"></span></div>
- <p class="ritual-caption" aria-hidden="true">잠들어 있던 기록이 깨어납니다.</p>
- <footer class="entrance-bottom"><span>WORLD ARCHIVE</span><span>세계관 · 캐릭터 · 장소</span></footer>
+ <div class="entry-controls"><button id="open-action" class="entry-button">펼치기 <span aria-hidden="true">◇</span></button><button id="enter" class="entry-button" hidden>입장 <span aria-hidden="true">→</span></button></div>
  <div class="portal" aria-hidden="true"></div>
 </section>
 <main id="archive" hidden>
