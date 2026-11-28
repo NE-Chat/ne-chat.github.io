@@ -13,8 +13,8 @@
 <link rel="preload" href="smoke.webp" as="image">
 <link rel="preload" href="paper.webp" as="image">
 <link rel="preload" href="reader-book.webp" as="image">
-<link rel="stylesheet" href="style.css?v=ne-codex-6">
-<script type="module" src="app.js?v=ne-codex-6"></script>
+<link rel="stylesheet" href="style.css?v=ne-codex-7">
+<script type="module" src="app.js?v=ne-codex-7"></script>
 </head>
 <body>
 <section id="entrance" aria-label="도감 입장">
@@ -22,15 +22,14 @@
  <button id="skip" class="skip" aria-label="연출을 건너뛰고 도감 입장">건너뛰기 <span aria-hidden="true">↗</span></button>
  <div class="scene" id="scene">
   <div class="desk-glow" aria-hidden="true"></div>
-  <div class="spread" id="spread" aria-hidden="true">
-   <div class="spread-shadow"></div>
-   <div class="spread-half spread-right"></div>
-   <div class="spread-half spread-left"></div>
-   <div id="smoke-source"></div>
-  </div>
-  <div class="closed-position">
-   <button id="open-book" class="closed-book" aria-label="책 펼치기">
-    <span class="cover-hinge" aria-hidden="true"><span class="cover-face"></span></span>
+  <div class="intro-stage" id="spread">
+   <div class="book-contact-shadow" aria-hidden="true"></div>
+   <button id="open-book" class="physical-book" aria-label="책 펼치기">
+    <span class="intro-right" aria-hidden="true"></span>
+    <span class="intro-left" aria-hidden="true">
+     <span class="intro-inside"></span>
+     <span class="intro-outside"></span>
+    </span>
    </button>
   </div>
   <canvas id="magic" aria-hidden="true"></canvas>
@@ -51,16 +50,6 @@
   <div id="pages" class="pages"></div>
   <div class="gutter" aria-hidden="true"></div>
  </div>
- <nav class="book-view-controls" aria-label="책 보기 방식">
-  <button type="button" data-book-view="left" aria-label="왼쪽 페이지 확대" aria-pressed="false">왼쪽</button>
-  <button type="button" data-book-view="spread" aria-label="책 전체 보기" aria-pressed="true">전체</button>
-  <button type="button" data-book-view="right" aria-label="오른쪽 페이지 확대" aria-pressed="false">오른쪽</button>
- </nav>
- <footer class="reader-controls">
-  <button id="previous" class="page-turn" aria-label="이전 페이지"><svg viewBox="0 0 36 18" aria-hidden="true"><path d="M32 9H4m8-7L4 9l8 7"/></svg></button>
-  <span id="pagination" aria-live="polite"></span>
-  <button id="next" class="page-turn" aria-label="다음 페이지"><svg viewBox="0 0 36 18" aria-hidden="true"><path d="M4 9h28m-8-7 8 7-8 7"/></svg></button>
- </footer>
 </main>
 <dialog id="character-dialog" aria-labelledby="character-name">
  <button id="close-character" class="dialog-close" aria-label="캐릭터 닫기">×</button>

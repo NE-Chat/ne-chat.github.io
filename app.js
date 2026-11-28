@@ -1,7 +1,7 @@
-import {bookLayout,COMPACT_QUERY} from './book-layout.mjs?v=ne-codex-6';
-import {turnLeaf} from './page-turn.mjs?v=ne-codex-6';
-import {catalog} from './characters.js?v=ne-codex-6';
-import {CATEGORIES,buildPages,categoriesOf,readingStep,gridMetrics} from './catalog-core.mjs?v=ne-codex-6';
+import {bookLayout,COMPACT_QUERY} from './book-layout.mjs?v=ne-codex-7';
+import {turnLeaf} from './page-turn.mjs?v=ne-codex-7';
+import {catalog} from './characters.js?v=ne-codex-7';
+import {CATEGORIES,buildPages,categoriesOf,readingStep,gridMetrics} from './catalog-core.mjs?v=ne-codex-7';
 'use strict';
 const entrance=document.querySelector('#entrance'),archive=document.querySelector('#archive'),book=document.querySelector('#open-book'),canvas=document.querySelector('#magic'),status=document.querySelector('#status');
 const openAction=document.querySelector('#open-action');
@@ -24,7 +24,8 @@ const parcels=Array.from({length:84},(_,i)=>({seed:i*2.399963,offset:Math.floor(
 function size(){
  if(entrance.hidden)return;
  const W=entrance.clientWidth,H=entrance.clientHeight,spread=document.querySelector('#spread');
- const x=W*.5,y=spread.offsetTop+spread.offsetHeight*.35;
+ const bounds=spread.getBoundingClientRect();
+ const x=W*.5,y=bounds.top+bounds.height*.35;
  const h=Math.min(y-H*.035,H*.69,W*1.16),w=Math.min(W*.98,h*1.2);
  view={width:w,height:h,x:x-w/2,y:y-h+6};
  Object.assign(canvas.style,{left:view.x+'px',top:view.y+'px',width:w+'px',height:h+'px'});
@@ -33,12 +34,12 @@ function size(){
 }
 function draw(now){
  if(!ctx)return;
- const elapsed=(now-began)/1000,strength=clamp((elapsed-.8)/2.4),t=now/1000;
+ const elapsed=(now-began)/1000,strength=clamp((elapsed-1.7)/2.4),t=now/1000;
  ctx.clearRect(0,0,view.width,view.height);
  if(!smokeImage.complete||!smokeImage.naturalWidth||!darkSmoke)return;
  for(const p of parcels){
   const age=(t*p.speed+p.offset)%1;
-  const growth=clamp((elapsed-1)/3.3);if(age>growth)continue;
+  const growth=clamp((elapsed-1.8)/3.3);if(age>growth)continue;
   const s=p.side?1:-1;
   const wave=Math.sin(age*8-t*.44+p.side*2.6),curl=Math.sin(age*14+t*.3+p.seed);
   const x=view.width*.5+wave*view.width*(.01+.055*age)+s*view.width*(.025+.13*Math.sin(age*3.2+t*.22))+curl*view.width*.012*age;
@@ -56,16 +57,15 @@ function draw(now){
 function frame(now){raf=0;if(phase==='idle'||phase==='done'||document.hidden||reduced.matches)return;draw(now);raf=requestAnimationFrame(frame);}
 function startFrames(){if(!raf&&!document.hidden&&!reduced.matches&&phase!=='idle'&&phase!=='done')raf=requestAnimationFrame(frame);}
 
-let currentCategory='all',pagePosition=0,bookView='spread';
+let currentCategory='all',pagePosition=0,bookView='left';
 let zoomAnimation=null;
 const singlePage=matchMedia(COMPACT_QUERY);
 const categories=document.querySelector('#categories'),pagesElement=document.querySelector('#pages'),reader=document.querySelector('#reader');
-const previousButton=document.querySelector('#previous'),nextButton=document.querySelector('#next');
 const dialog=document.querySelector('#character-dialog');
 let allPages=buildPages(catalog.characters),layoutFrame=0;
 const labels=Object.fromEntries(CATEGORIES);
 const node=(tag,classes,text)=>{const n=document.createElement(tag);if(classes)n.className=classes;if(text!==undefined)n.textContent=text;return n;};
-const ornament=classes=>{const img=node('img',classes);img.src=`emblem-${currentCategory}.svg?v=ne-codex-6`;img.alt='';return img;};
+const ornament=classes=>{const img=node('img',classes);img.src=`emblem-${currentCategory}.svg?v=ne-codex-7`;img.alt='';return img;};
 function safeURL(value){if(!value)return '';try{const u=new URL(value,location.href);return ['http:','https:'].includes(u.protocol)?u.href:'';}catch{return '';}}
 function makeCard(character){
  const button=node('button','character-card');button.type='button';button.setAttribute('aria-label',character.name||'캐릭터');
@@ -100,57 +100,98 @@ function fitReader(){
  if(archive.hidden)return;
  const m=bookLayout(archive.clientWidth,archive.clientHeight,bookView,singlePage.matches);
  Object.assign(reader.style,{width:m.width+'px',height:m.height+'px',left:m.left+'px',top:m.top+'px'});
+ reader.style.setProperty('--page-inset-x',m.pageInset+'px');
  const header=document.querySelector('.reader-top');
  Object.assign(header.style,{width:m.headerWidth+'px',top:m.headerTop+'px'});
  archive.dataset.compact=String(singlePage.matches);
- archive.dataset.canFocus=String(m.canFocus);
+ archive.dataset.portrait=String(m.portrait);
  reader.dataset.view=m.view;archive.dataset.view=m.view;
 }
 function syncView(){
  fitReader();
  const activeView=reader.dataset.view||'spread';
  Array.from(pagesElement.children).forEach((page,i)=>{page.inert=activeView!=='spread'&&i!==(activeView==='left'?0:1);});
- document.querySelectorAll('[data-book-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.bookView===activeView)));
- previousButton.disabled=targetStep(-1).position<0;nextButton.disabled=targetStep(1).position>lastPosition();
+
 }
-function setBookView(view){if(turning)return;const pan=bookView!=='spread'&&view!=='spread';reader.classList.toggle('panning',pan);bookView=view;syncView();scheduleLayout();if(pan)setTimeout(()=>reader.classList.remove('panning'),380);}
+let cameraAnimation=null,panning=false;
+function panCamera(from,to,duration){
+ if(reduced.matches||Math.abs(from-to)<1)return;
+ cameraAnimation?.cancel();panning=true;
+ const animation=reader.animate([{left:from+'px'},{left:to+'px'}],{duration,easing:'cubic-bezier(.35,0,.2,1)'});
+ cameraAnimation=animation;
+ animation.finished.then(()=>{if(cameraAnimation===animation){cameraAnimation=null;panning=false;}}).catch(()=>{});
+}
+function setBookView(view){
+ if(turning||panning)return;
+ const from=parseFloat(reader.style.left);bookView=view;syncView();scheduleLayout();
+ panCamera(from,parseFloat(reader.style.left),460);
+ status.textContent=`${pagePosition+(view==='right'?2:1)}페이지`;
+}
 function renderArchive(){
  allPages=buildPages(catalog.characters,currentCategory);pagePosition=Math.floor(pagePosition/2)*2;pagePosition=Math.max(0,Math.min(pagePosition,lastPosition()));
  gridObserver.disconnect();pagesElement.replaceChildren();
  const visible=2;for(let i=0;i<visible;i++){const index=pagePosition+i;if(allPages[index])pagesElement.append(makePage(allPages[index],index,i?'right':'left'));}
  syncView();
- const number=n=>String(n).padStart(2,'0');document.querySelector('#pagination').textContent=currentCategory==='all'&&pagePosition===0?'':`${number(pagePosition+1)} — ${number(pagePosition+2)}`;
  document.querySelectorAll('.category-tab').forEach(tab=>tab.setAttribute('aria-pressed',String(tab.dataset.category===currentCategory)));
  document.querySelectorAll('.character-grid').forEach(grid=>gridObserver.observe(grid));scheduleLayout();
 }
 let turning=false,cancelTurn=null,turnGeneration=0;
 function finishTurn(){turning=false;cancelTurn=null;reader.removeAttribute('aria-busy');}
-function stopTurn(){turnGeneration++;cancelTurn?.();finishTurn();}
+function stopTurn(){turnGeneration++;cancelTurn?.();cameraAnimation?.cancel();cameraAnimation=null;panning=false;finishTurn();}
 function changePages(update,direction){
- if(turning)return;
+ if(turning||panning)return;
+ const oldCamera=parseFloat(reader.style.left);
  const before=Array.from(pagesElement.children).map(p=>p.cloneNode(true));
  update();renderArchive();
  if(reduced.matches||!before.length)return;
  turning=true;reader.setAttribute('aria-busy','true');const generation=++turnGeneration;
+ panCamera(oldCamera,parseFloat(reader.style.left),1100);
  // Grid measurements run first so snapshots keep the exact card dimensions.
  requestAnimationFrame(()=>{if(generation!==turnGeneration)return;cancelTurn=turnLeaf({host:reader,pages:pagesElement,before,after:Array.from(pagesElement.children),direction,single:false,onFinish:finishTurn});});
 }
-// Bookmarks and arrows turn the same physical paper leaf.
-for(const [id,label] of CATEGORIES){const button=node('button','category-tab',label);button.type='button';button.dataset.category=id;button.setAttribute('aria-pressed',String(id==='all'));button.addEventListener('click',()=>{changePages(()=>{currentCategory=id;pagePosition=id==='all'?2:0;if(bookView==='right')bookView='left';},1);status.textContent=`${label} 도감`});categories.append(button);}
-function turn(direction){
- if(turning||direction>0&&nextButton.disabled||direction<0&&previousButton.disabled)return;
- const target=targetStep(direction);
- if(target.position===pagePosition){setBookView(target.view);return;}
- changePages(()=>{pagePosition=target.position;bookView=target.view;},direction);status.textContent=`${pagePosition+1}페이지`;
+// Ribbon bookmarks jump to a category's left opening page.
+for(const [id,label] of CATEGORIES){
+ const button=node('button','category-tab');button.append(node('span','bookmark-label',label));button.type='button';button.dataset.category=id;button.setAttribute('aria-pressed',String(id==='all'));
+ button.addEventListener('click',()=>{changePages(()=>{currentCategory=id;pagePosition=id==='all'?2:0;bookView='left';},1);status.textContent=`${label} 도감`});categories.append(button);
 }
-for(const b of document.querySelectorAll('[data-book-view]'))b.addEventListener('click',()=>setBookView(b.dataset.bookView));
-let touchStart=null;
-reader.addEventListener('pointerdown',e=>{if(e.pointerType==='touch')touchStart={x:e.clientX,y:e.clientY};});
-reader.addEventListener('pointerup',e=>{if(!touchStart)return;const dx=e.clientX-touchStart.x,dy=e.clientY-touchStart.y;touchStart=null;if(Math.abs(dx)>55&&Math.abs(dx)>Math.abs(dy)*1.5){reader.dataset.swiped='true';turn(dx<0?1:-1);setTimeout(()=>delete reader.dataset.swiped,300);}});
-reader.addEventListener('pointercancel',()=>{touchStart=null;});
-reader.addEventListener('click',e=>{if(reader.dataset.swiped){e.preventDefault();e.stopImmediatePropagation();}},true);
-previousButton.addEventListener('click',()=>turn(-1));nextButton.addEventListener('click',()=>turn(1));
-document.querySelector('#home').addEventListener('click',()=>{if(currentCategory==='all'&&pagePosition===0){setBookView('spread');return;}changePages(()=>{currentCategory='all';pagePosition=0;if(bookView==='right')bookView='left';},-1);});
+function turn(direction){
+ if(turning||panning)return;
+ const target=targetStep(direction);
+ if(target.position<0||target.position>lastPosition())return;
+ if(target.position===pagePosition){setBookView(target.view);return;}
+ changePages(()=>{pagePosition=target.position;bookView=target.view==='spread'?(direction>0?'left':'right'):target.view;},direction);
+ status.textContent=`${pagePosition+(bookView==='right'?2:1)}페이지`;
+}
+let dragStart=null,suppressClickUntil=0;
+reader.addEventListener('pointerdown',e=>{
+ if(e.button!==0||turning||panning)return;
+ dragStart={x:e.clientX,y:e.clientY,id:e.pointerId,dragged:false};
+});
+reader.addEventListener('pointermove',e=>{
+ if(!dragStart||dragStart.id!==e.pointerId)return;
+ const dx=e.clientX-dragStart.x,dy=e.clientY-dragStart.y;
+ if(Math.abs(dx)>16&&Math.abs(dx)>Math.abs(dy)*1.35){
+  dragStart.dragged=true;reader.setPointerCapture(e.pointerId);e.preventDefault();
+ }
+});
+reader.addEventListener('pointerup',e=>{
+ if(!dragStart||dragStart.id!==e.pointerId)return;
+ const start=dragStart;dragStart=null;
+ const dx=e.clientX-start.x,dy=e.clientY-start.y;
+ if(reader.hasPointerCapture(e.pointerId))reader.releasePointerCapture(e.pointerId);
+ if(start.dragged){suppressClickUntil=performance.now()+500;if(Math.abs(dx)>38&&Math.abs(dx)>Math.abs(dy)*1.35)turn(dx<0?1:-1);}
+});
+reader.addEventListener('pointercancel',()=>{dragStart=null;});
+reader.addEventListener('dragstart',e=>e.preventDefault());
+reader.addEventListener('click',e=>{
+ if(performance.now()<suppressClickUntil){e.preventDefault();e.stopImmediatePropagation();return;}
+ if(e.pointerType==='touch'||e.target.closest('button,a'))return;
+ // A mouse can also click the blank page itself; no arrow controls are needed.
+ if(reader.dataset.view==='spread'){
+  const bounds=reader.getBoundingClientRect();turn(e.clientX<bounds.left+bounds.width/2?-1:1);
+ }
+},true);
+document.querySelector('#home').addEventListener('click',()=>{if(currentCategory==='all'&&pagePosition===0){setBookView('left');return;}changePages(()=>{currentCategory='all';pagePosition=0;bookView='left';},-1);});
 document.addEventListener('keydown',event=>{if(archive.hidden||dialog.open||event.target.closest('input,textarea,select'))return;if(event.key==='ArrowRight'){event.preventDefault();turn(1);}if(event.key==='ArrowLeft'){event.preventDefault();turn(-1);}});
 function resizeReader(){stopTurn();if(phase==='zooming')enter();syncView();scheduleLayout();}
 singlePage.addEventListener('change',resizeReader);window.addEventListener('resize',resizeReader,{passive:true});
@@ -165,7 +206,7 @@ function showCharacter(character){
 document.querySelector('#close-character').addEventListener('click',()=>dialog.close());dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();}});
 
 function prepareArchive(){
- currentCategory='all';pagePosition=0;bookView='spread';archive.hidden=false;archive.classList.add('preparing');archive.inert=true;renderArchive();
+ currentCategory='all';pagePosition=0;bookView='left';archive.hidden=false;archive.classList.add('preparing');archive.inert=true;renderArchive();
 }
 function enter(){
  if(phase==='done')return;
@@ -187,8 +228,8 @@ function openBook(){
  if(phase!=='idle')return;
  setPhase('opening');began=performance.now();book.disabled=true;openAction.disabled=true;entrance.classList.add('opening');status.textContent='책이 열리고 있습니다.';size();startFrames();
  if(reduced.matches){enter();return;}
- later(()=>{setPhase('open');entrance.classList.add('opened');openAction.hidden=true;book.tabIndex=-1;size();},2100);
- later(zoomIntoBook,4200);
+ later(()=>{setPhase('open');entrance.classList.add('opened');openAction.hidden=true;book.tabIndex=-1;size();},2800);
+ later(zoomIntoBook,4400);
 }
 function replay(){
  stopTurn();clearTimers();zoomAnimation?.cancel();zoomAnimation=null;archive.hidden=true;archive.classList.remove('preparing');archive.inert=false;
