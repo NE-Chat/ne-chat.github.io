@@ -1,6 +1,7 @@
-import {turnLeaf} from './page-turn.mjs?v=ne-codex-5';
-import {catalog} from './characters.js?v=ne-codex-5';
-import {CATEGORIES,buildPages,categoriesOf,readingStep,gridMetrics} from './catalog-core.mjs?v=ne-codex-5';
+import {bookLayout,COMPACT_QUERY} from './book-layout.mjs?v=ne-codex-6';
+import {turnLeaf} from './page-turn.mjs?v=ne-codex-6';
+import {catalog} from './characters.js?v=ne-codex-6';
+import {CATEGORIES,buildPages,categoriesOf,readingStep,gridMetrics} from './catalog-core.mjs?v=ne-codex-6';
 'use strict';
 const entrance=document.querySelector('#entrance'),archive=document.querySelector('#archive'),book=document.querySelector('#open-book'),canvas=document.querySelector('#magic'),status=document.querySelector('#status');
 const openAction=document.querySelector('#open-action');
@@ -54,16 +55,17 @@ function draw(now){
 }
 function frame(now){raf=0;if(phase==='idle'||phase==='done'||document.hidden||reduced.matches)return;draw(now);raf=requestAnimationFrame(frame);}
 function startFrames(){if(!raf&&!document.hidden&&!reduced.matches&&phase!=='idle'&&phase!=='done')raf=requestAnimationFrame(frame);}
+
 let currentCategory='all',pagePosition=0,bookView='spread';
 let zoomAnimation=null;
-const singlePage=matchMedia('(max-width:700px)');
+const singlePage=matchMedia(COMPACT_QUERY);
 const categories=document.querySelector('#categories'),pagesElement=document.querySelector('#pages'),reader=document.querySelector('#reader');
 const previousButton=document.querySelector('#previous'),nextButton=document.querySelector('#next');
 const dialog=document.querySelector('#character-dialog');
 let allPages=buildPages(catalog.characters),layoutFrame=0;
 const labels=Object.fromEntries(CATEGORIES);
 const node=(tag,classes,text)=>{const n=document.createElement(tag);if(classes)n.className=classes;if(text!==undefined)n.textContent=text;return n;};
-const ornament=classes=>{const img=node('img',classes);img.src=`emblem-${currentCategory}.svg`;img.alt='';return img;};
+const ornament=classes=>{const img=node('img',classes);img.src=`emblem-${currentCategory}.svg?v=ne-codex-6`;img.alt='';return img;};
 function safeURL(value){if(!value)return '';try{const u=new URL(value,location.href);return ['http:','https:'].includes(u.protocol)?u.href:'';}catch{return '';}}
 function makeCard(character){
  const button=node('button','character-card');button.type='button';button.setAttribute('aria-label',character.name||'캐릭터');
@@ -93,11 +95,22 @@ function makePage(page,index,side){
 const gridObserver=new ResizeObserver(()=>scheduleLayout());
 function scheduleLayout(){if(layoutFrame)return;layoutFrame=requestAnimationFrame(()=>{layoutFrame=0;document.querySelectorAll('.character-grid').forEach(grid=>{const m=gridMetrics(grid.clientWidth,grid.clientHeight,singlePage.matches);grid.style.setProperty('--cols',m.columns);grid.style.setProperty('--card-w',m.cardWidth.toFixed(2)+'px');grid.style.setProperty('--gap',m.gap.toFixed(2)+'px');grid.style.setProperty('--label',m.label.toFixed(2)+'px');});});}
 function lastPosition(){return Math.floor((allPages.length-1)/2)*2;}
-function targetStep(direction){return readingStep(pagePosition,bookView,direction,singlePage.matches);}
+function targetStep(direction){return readingStep(pagePosition,reader.dataset.view||'spread',direction,singlePage.matches);}
+function fitReader(){
+ if(archive.hidden)return;
+ const m=bookLayout(archive.clientWidth,archive.clientHeight,bookView,singlePage.matches);
+ Object.assign(reader.style,{width:m.width+'px',height:m.height+'px',left:m.left+'px',top:m.top+'px'});
+ const header=document.querySelector('.reader-top');
+ Object.assign(header.style,{width:m.headerWidth+'px',top:m.headerTop+'px'});
+ archive.dataset.compact=String(singlePage.matches);
+ archive.dataset.canFocus=String(m.canFocus);
+ reader.dataset.view=m.view;archive.dataset.view=m.view;
+}
 function syncView(){
- reader.dataset.view=singlePage.matches?bookView:'spread';archive.dataset.view=reader.dataset.view;
- Array.from(pagesElement.children).forEach((page,i)=>{page.inert=singlePage.matches&&bookView!=='spread'&&i!==(bookView==='left'?0:1);});
- document.querySelectorAll('[data-book-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.bookView===bookView)));
+ fitReader();
+ const activeView=reader.dataset.view||'spread';
+ Array.from(pagesElement.children).forEach((page,i)=>{page.inert=activeView!=='spread'&&i!==(activeView==='left'?0:1);});
+ document.querySelectorAll('[data-book-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.bookView===activeView)));
  previousButton.disabled=targetStep(-1).position<0;nextButton.disabled=targetStep(1).position>lastPosition();
 }
 function setBookView(view){if(turning)return;const pan=bookView!=='spread'&&view!=='spread';reader.classList.toggle('panning',pan);bookView=view;syncView();scheduleLayout();if(pan)setTimeout(()=>reader.classList.remove('panning'),380);}
@@ -139,7 +152,9 @@ reader.addEventListener('click',e=>{if(reader.dataset.swiped){e.preventDefault()
 previousButton.addEventListener('click',()=>turn(-1));nextButton.addEventListener('click',()=>turn(1));
 document.querySelector('#home').addEventListener('click',()=>{if(currentCategory==='all'&&pagePosition===0){setBookView('spread');return;}changePages(()=>{currentCategory='all';pagePosition=0;if(bookView==='right')bookView='left';},-1);});
 document.addEventListener('keydown',event=>{if(archive.hidden||dialog.open||event.target.closest('input,textarea,select'))return;if(event.key==='ArrowRight'){event.preventDefault();turn(1);}if(event.key==='ArrowLeft'){event.preventDefault();turn(-1);}});
-singlePage.addEventListener('change',()=>{stopTurn();bookView='spread';if(!archive.hidden)renderArchive();});window.addEventListener('resize',()=>{stopTurn();if(phase==='zooming')enter();scheduleLayout();},{passive:true});
+function resizeReader(){stopTurn();if(phase==='zooming')enter();syncView();scheduleLayout();}
+singlePage.addEventListener('change',resizeReader);window.addEventListener('resize',resizeReader,{passive:true});
+window.visualViewport?.addEventListener('resize',resizeReader,{passive:true});
 function showCharacter(character){
  const image=document.querySelector('#character-image');image.src=safeURL(character.image);image.alt=character.name||'';image.style.objectPosition=character.position||'50% 50%';image.parentElement.hidden=!safeURL(character.image);
  document.querySelector('#character-name').textContent=character.name||'';document.querySelector('#character-category').textContent=categoriesOf(character).map(c=>labels[c]).join(' · ');

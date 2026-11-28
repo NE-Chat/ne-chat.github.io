@@ -37,7 +37,7 @@ export function turnLeaf({host,pages,before,after,direction,single,duration=1100
  const shadow=document.createElement('div');shadow.className='leaf-shadow';layer.append(shadow);
  const strips=[],count=single?14:18,step=width/count;
  for(let i=0;i<count;i++){
-  const strip=document.createElement('div');strip.className='leaf-strip';strip.style.width=(step+.6)+'px';strip.style.height=height+'px';
+  const strip=document.createElement('div');strip.className='leaf-strip';strip.style.width=(step+1.6)+'px';strip.style.height=height+'px';
   for(const [side,source,offset] of [['front',front,-i*step],['back',back,-(width-(i+1)*step)]]){
    const face=document.createElement('div');face.className='leaf-face leaf-'+side;
    const copy=clonePage(source);copy.style.left=offset+'px';face.append(copy);strip.append(face);
